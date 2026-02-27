@@ -1,0 +1,35 @@
+@import url("https://fonts.googleapis.com/css2?family=Rouge+Script&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&display=swap");
+
+@import "tailwindcss";
+
+@theme {
+  /* gradients */
+  --background-image-custom-gradient: linear-gradient(to right, #6366f1, #9333ea);
+  --background-image-custom-gradient-hover: linear-gradient(to right, #4f39f6, #9810FA);
+
+  /* colors */
+  --color-navbarColor: #ffffff;
+  --color-btnColor: #3364f7;
+  --color-linkColor: #2a5bd7;
+
+  /* boxShadow */
+  --shadow-custom: 0 0 15px rgba(0, 0, 0, 0.3);
+  --shadow-right: 10px 0px 10px -5px rgba(0, 0, 0, 0.3);
+
+  /* fontFamily */
+  --font-rouge-script: "Rouge Script", cursive;
+  --font-merriweather: "Merriweather", serif;
+}
+
+button:hover {
+  cursor: pointer;
+}
+
+body {
+  font-family: var(--font-merriweather);
+}
+
+.logo {
+  font-family: var(--font-rouge-script);
+}
