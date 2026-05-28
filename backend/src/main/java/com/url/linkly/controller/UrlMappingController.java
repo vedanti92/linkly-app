@@ -2,6 +2,7 @@ package com.url.linkly.controller;
 
 import com.url.linkly.dtos.ClickEventDTO;
 import com.url.linkly.dtos.UrlMappingDTO;
+import com.url.linkly.exception.DuplicateUrlException;
 import com.url.linkly.models.User;
 import com.url.linkly.service.UrlMappingService;
 import com.url.linkly.service.UserService;
@@ -26,11 +27,15 @@ public class UrlMappingController {
 
     @PostMapping("/shorten")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<UrlMappingDTO> createShortUrl(@RequestBody Map<String, String> request, Principal principal) {
-        String originalUrl = request.get("originalUrl");
-        User user = userService.findByUsername(principal.getName());
-        UrlMappingDTO urlMappingDTO = urlMappingService.createShortUrl(originalUrl, user);
-        return ResponseEntity.ok(urlMappingDTO);
+    public ResponseEntity<?> createShortUrl(@RequestBody Map<String, String> request, Principal principal) {
+        try {
+            String originalUrl = request.get("originalUrl");
+            User user = userService.findByUsername(principal.getName());
+            UrlMappingDTO urlMappingDTO = urlMappingService.createShortUrl(originalUrl, user);
+            return ResponseEntity.ok(urlMappingDTO);
+        } catch (DuplicateUrlException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     @GetMapping("/myurls")
@@ -73,12 +78,15 @@ public class UrlMappingController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<UrlMappingDTO> updateUrl(@PathVariable Long id, @RequestBody Map<String, String> request, Principal principal) {
-        User user = userService.findByUsername(principal.getName());
-        String newOriginalUrl = request.get("originalUrl");
+    public ResponseEntity<?> updateUrl(@PathVariable Long id, @RequestBody Map<String, String> request, Principal principal) {
+        try {
+            User user = userService.findByUsername(principal.getName());
+            String newOriginalUrl = request.get("originalUrl");
 
-        UrlMappingDTO updated = urlMappingService.updateUrl(id, newOriginalUrl, user);
-
-        return ResponseEntity.ok(updated);
+            UrlMappingDTO updated = urlMappingService.updateUrl(id, newOriginalUrl, user);
+            return ResponseEntity.ok(updated);
+        } catch (DuplicateUrlException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 }

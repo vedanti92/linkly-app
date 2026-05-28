@@ -2,6 +2,7 @@ package com.url.linkly.service;
 
 import com.url.linkly.dtos.ClickEventDTO;
 import com.url.linkly.dtos.UrlMappingDTO;
+import com.url.linkly.exception.DuplicateUrlException;
 import com.url.linkly.models.ClickEvent;
 import com.url.linkly.models.UrlMapping;
 import com.url.linkly.models.User;
@@ -24,6 +25,9 @@ public class UrlMappingService {
     private ClickEventRepository clickEventRepository;
 
     public UrlMappingDTO createShortUrl(String originalUrl, User user) {
+        if (urlMappingRepository.findByOriginalUrl(originalUrl) != null) {
+            throw new DuplicateUrlException("URL already exists.");
+        }
         String shortUrl = generateShortUrl();
         UrlMapping urlMapping = new UrlMapping();
         urlMapping.setOriginalUrl(originalUrl);
@@ -48,11 +52,15 @@ public class UrlMappingService {
     private String generateShortUrl() {
         String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         Random random = new Random();
-        StringBuilder shortUrl = new StringBuilder(8);
-        for (int i = 0; i < 8; i++) {
-            shortUrl.append(characters.charAt(random.nextInt(characters.length())));
-        }
-        return shortUrl.toString();
+        String shortUrl;
+        do {
+            StringBuilder builder = new StringBuilder(8);
+            for (int i = 0; i < 8; i++) {
+                builder.append(characters.charAt(random.nextInt(characters.length())));
+            }
+            shortUrl = builder.toString();
+        } while (urlMappingRepository.findByShortUrl(shortUrl) != null);
+        return shortUrl;
     }
 
     public List<UrlMappingDTO> getUrlsByUser(User user) {
@@ -114,7 +122,12 @@ public class UrlMappingService {
         UrlMapping urlMapping = urlMappingRepository.findById(id).orElseThrow(() -> new RuntimeException("URL not found."));
 
         if (!urlMapping.getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("You are not allowed to delete this URL.");
+            throw new RuntimeException("You are not allowed to update this URL.");
+        }
+
+        UrlMapping existing = urlMappingRepository.findByOriginalUrl(newOriginalUrl);
+        if (existing != null && !existing.getId().equals(id)) {
+            throw new DuplicateUrlException("URL already exists.");
         }
 
         urlMapping.setOriginalUrl(newOriginalUrl);
