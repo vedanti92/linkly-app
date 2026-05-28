@@ -24,6 +24,10 @@ public class UrlMappingService {
     private ClickEventRepository clickEventRepository;
 
     public UrlMappingDTO createShortUrl(String originalUrl, User user) {
+        if (urlMappingRepository.existsByOriginalUrlAndUser(originalUrl, user)) {
+            throw new RuntimeException("This URL already exists for your account!");
+        }
+
         String shortUrl = generateShortUrl();
         UrlMapping urlMapping = new UrlMapping();
         urlMapping.setOriginalUrl(originalUrl);
