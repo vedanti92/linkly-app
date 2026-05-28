@@ -8,13 +8,6 @@ import java.util.List;
 
 @Entity
 @Data
-@Table(
-        name = "url_mappings",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = "originalUrl"),
-                @UniqueConstraint(columnNames = "shortUrl")
-        }
-)
 public class UrlMapping {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
