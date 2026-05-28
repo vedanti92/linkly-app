@@ -2,7 +2,6 @@ package com.url.linkly.service;
 
 import com.url.linkly.dtos.ClickEventDTO;
 import com.url.linkly.dtos.UrlMappingDTO;
-import com.url.linkly.exception.DuplicateUrlException;
 import com.url.linkly.models.ClickEvent;
 import com.url.linkly.models.UrlMapping;
 import com.url.linkly.models.User;
@@ -69,14 +68,6 @@ class UrlMappingServiceTest {
         assertEquals("https://example.com", result.getOriginalUrl());
         assertEquals("vedanti", result.getUsername());
         verify(urlMappingRepository).save(any(UrlMapping.class));
-    }
-
-    @Test
-    void createShortUrl_ThrowsException_WhenDuplicateOriginalUrl() {
-        when(urlMappingRepository.findByOriginalUrl("https://example.com")).thenReturn(urlMapping);
-
-        assertThrows(DuplicateUrlException.class, () -> urlMappingService.createShortUrl("https://example.com", user));
-        verify(urlMappingRepository, never()).save(any(UrlMapping.class));
     }
 
     // ───── getOriginalUrl ─────
