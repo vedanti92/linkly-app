@@ -51,7 +51,11 @@ const CreateNewShortUrl = ({ setOpen, refetch }) => {
         error.response?.data?.message ||
         error.response?.data ||
         "Error creating short URL.";
-      toast.error(message);
+      toast.error(message, {
+        position: "bottom-center",
+        className: "mb-5",
+        duration: 3000,
+      });
     } finally {
       setLoading(false);
     }
