@@ -13,6 +13,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,192 +29,282 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class UrlMappingServiceTest {
 
-    @Mock
-    private UrlMappingRepository urlMappingRepository;
+        @Mock
+        private UrlMappingRepository urlMappingRepository;
 
-    @Mock
-    private ClickEventRepository clickEventRepository;
+        @Mock
+        private ClickEventRepository clickEventRepository;
 
-    @InjectMocks
-    private UrlMappingService urlMappingService;
+        @InjectMocks
+        private UrlMappingService urlMappingService;
 
-    private User user;
-    private UrlMapping urlMapping;
+        private User user;
+        private UrlMapping urlMapping;
 
-    @BeforeEach
-    void setUp() {
-        user = new User();
-        user.setId(1L);
-        user.setUsername("vedanti");
-        user.setEmail("vedanti@gmail.com");
-        user.setRole("ROLE_USER");
+        @BeforeEach
+        void setUp() {
+                user = new User();
+                user.setId(1L);
+                user.setUsername("vedanti");
+                user.setEmail("vedanti@gmail.com");
+                user.setRole("ROLE_USER");
 
-        urlMapping = new UrlMapping();
-        urlMapping.setId(1L);
-        urlMapping.setOriginalUrl("https://example.com");
-        urlMapping.setShortUrl("abc12345");
-        urlMapping.setClickCount(0);
-        urlMapping.setCreatedDate(LocalDateTime.now());
-        urlMapping.setUser(user);
-    }
+                urlMapping = new UrlMapping();
+                urlMapping.setId(1L);
+                urlMapping.setOriginalUrl("https://example.com");
+                urlMapping.setShortUrl("abc12345");
+                urlMapping.setClickCount(0);
+                urlMapping.setCreatedDate(LocalDateTime.now());
+                urlMapping.setUser(user);
+        }
 
-    // ───── createShortUrl ─────
+        // ───── createShortUrl ─────
 
-    @Test
-    void createShortUrl_Success() {
-        when(urlMappingRepository.save(any(UrlMapping.class))).thenReturn(urlMapping);
+        @Test
+        void createShortUrl_Success() {
+                when(urlMappingRepository.saveAndFlush(any(UrlMapping.class)))
+                                .thenReturn(urlMapping);
 
-        UrlMappingDTO result = urlMappingService.createShortUrl("https://example.com", user);
+                UrlMappingDTO result = urlMappingService.createShortUrl("https://example.com", user);
 
-        assertNotNull(result);
-        assertEquals("https://example.com", result.getOriginalUrl());
-        assertEquals("vedanti", result.getUsername());
-        verify(urlMappingRepository).save(any(UrlMapping.class));
-    }
+                assertNotNull(result);
+                assertEquals("https://example.com", result.getOriginalUrl());
+                assertEquals("vedanti", result.getUsername());
+                verify(urlMappingRepository).saveAndFlush(any(UrlMapping.class));
+        }
 
-    // ───── getOriginalUrl ─────
+        @Test
+        void createShortUrl_RetriesWhenShortCodeAlreadyExists() {
+                when(urlMappingRepository.existsByShortUrl(anyString()))
+                                .thenReturn(true, false);
 
-    @Test
-    void getOriginalUrl_Success_IncrementsClickCount() {
-        when(urlMappingRepository.findByShortUrl("abc12345")).thenReturn(urlMapping);
-        when(urlMappingRepository.save(any(UrlMapping.class))).thenReturn(urlMapping);
-        when(clickEventRepository.save(any(ClickEvent.class))).thenReturn(new ClickEvent());
+                when(urlMappingRepository.saveAndFlush(any(UrlMapping.class)))
+                                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        UrlMapping result = urlMappingService.getOriginalUrl("abc12345");
+                UrlMappingDTO result = urlMappingService.createShortUrl("https://example.com", user);
 
-        assertNotNull(result);
-        assertEquals(1, result.getClickCount());
-        verify(clickEventRepository).save(any(ClickEvent.class));
-    }
+                assertNotNull(result);
+                assertNotEquals("abc12345", result.getShortUrl());
 
-    @Test
-    void getOriginalUrl_ReturnsNull_WhenShortUrlNotFound() {
-        when(urlMappingRepository.findByShortUrl("nonexistent")).thenReturn(null);
+                verify(urlMappingRepository, times(2))
+                                .existsByShortUrl(anyString());
 
-        UrlMapping result = urlMappingService.getOriginalUrl("nonexistent");
+                verify(urlMappingRepository)
+                                .saveAndFlush(argThat(mapping -> !"abc12345".equals(mapping.getShortUrl())));
+        }
 
-        assertNull(result);
-        verify(clickEventRepository, never()).save(any());
-    }
+        @Test
+        void createShortUrl_RejectsJavaScriptUrl() {
+                ResponseStatusException exception = assertThrows(
+                                ResponseStatusException.class,
+                                () -> urlMappingService.createShortUrl(
+                                                "javascript:alert(1)", user));
 
-    // ───── getUrlsByUser ─────
+                assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
 
-    @Test
-    void getUrlsByUser_ReturnsListOfDTOs() {
-        when(urlMappingRepository.findByUser(user)).thenReturn(List.of(urlMapping));
+                verify(urlMappingRepository, never()).save(any(UrlMapping.class));
+        }
 
-        List<UrlMappingDTO> result = urlMappingService.getUrlsByUser(user);
+        @Test
+        void createShortUrl_RejectsUrlWithoutHost() {
+                ResponseStatusException exception = assertThrows(
+                                ResponseStatusException.class,
+                                () -> urlMappingService.createShortUrl(
+                                                "https:///missing-host", user));
 
-        assertEquals(1, result.size());
-        assertEquals("https://example.com", result.get(0).getOriginalUrl());
-    }
+                assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
 
-    // ───── deleteUrl ─────
+                verify(urlMappingRepository, never()).save(any(UrlMapping.class));
+        }
 
-    @Test
-    void deleteUrl_Success_WhenOwner() {
-        when(urlMappingRepository.findById(1L)).thenReturn(Optional.of(urlMapping));
+        // ───── getOriginalUrl ─────
 
-        assertDoesNotThrow(() -> urlMappingService.deleteUrl(1L, user));
-        verify(urlMappingRepository).delete(urlMapping);
-    }
+        @Test
+        void getOriginalUrl_Success_IncrementsClickCount() {
+                when(urlMappingRepository.findByShortUrl("abc12345")).thenReturn(urlMapping);
+                when(urlMappingRepository.save(any(UrlMapping.class))).thenReturn(urlMapping);
+                when(clickEventRepository.save(any(ClickEvent.class))).thenReturn(new ClickEvent());
 
-    @Test
-    void deleteUrl_ThrowsException_WhenNotOwner() {
-        User anotherUser = new User();
-        anotherUser.setId(2L);
-        anotherUser.setUsername("someone_else");
+                UrlMapping result = urlMappingService.getOriginalUrl("abc12345");
 
-        when(urlMappingRepository.findById(1L)).thenReturn(Optional.of(urlMapping));
+                assertNotNull(result);
+                assertEquals(1, result.getClickCount());
+                verify(clickEventRepository).save(any(ClickEvent.class));
+        }
 
-        assertThrows(RuntimeException.class, () -> urlMappingService.deleteUrl(1L, anotherUser));
-        verify(urlMappingRepository, never()).delete(any());
-    }
+        @Test
+        void getOriginalUrl_ReturnsNull_WhenShortUrlNotFound() {
+                when(urlMappingRepository.findByShortUrl("nonexistent")).thenReturn(null);
 
-    @Test
-    void deleteUrl_ThrowsException_WhenUrlNotFound() {
-        when(urlMappingRepository.findById(99L)).thenReturn(Optional.empty());
+                UrlMapping result = urlMappingService.getOriginalUrl("nonexistent");
 
-        assertThrows(RuntimeException.class, () -> urlMappingService.deleteUrl(99L, user));
-    }
+                assertNull(result);
+                verify(clickEventRepository, never()).save(any());
+        }
 
-    // ───── updateUrl ─────
+        // ───── getUrlsByUser ─────
 
-    @Test
-    void updateUrl_Success_WhenOwner() {
-        when(urlMappingRepository.findById(1L)).thenReturn(Optional.of(urlMapping));
-        when(urlMappingRepository.save(any(UrlMapping.class))).thenReturn(urlMapping);
+        @Test
+        void getUrlsByUser_ReturnsListOfDTOs() {
+                when(urlMappingRepository.findByUser(user)).thenReturn(List.of(urlMapping));
 
-        UrlMappingDTO result = urlMappingService.updateUrl(1L, "https://newurl.com", user);
+                List<UrlMappingDTO> result = urlMappingService.getUrlsByUser(user);
 
-        assertNotNull(result);
-        assertEquals("https://newurl.com", result.getOriginalUrl());
-    }
+                assertEquals(1, result.size());
+                assertEquals("https://example.com", result.get(0).getOriginalUrl());
+        }
 
-    @Test
-    void updateUrl_ThrowsException_WhenNotOwner() {
-        User anotherUser = new User();
-        anotherUser.setId(2L);
+        // ───── deleteUrl ─────
 
-        when(urlMappingRepository.findById(1L)).thenReturn(Optional.of(urlMapping));
+        @Test
+        void deleteUrl_Success_WhenOwner() {
+                when(urlMappingRepository.findById(1L)).thenReturn(Optional.of(urlMapping));
 
-        assertThrows(RuntimeException.class, () -> urlMappingService.updateUrl(1L, "https://newurl.com", anotherUser));
-    }
+                assertDoesNotThrow(() -> urlMappingService.deleteUrl(1L, user));
+                verify(urlMappingRepository).delete(urlMapping);
+        }
 
-    // ───── getClickEventsByDate ─────
+        @Test
+        void deleteUrl_ThrowsException_WhenNotOwner() {
+                User anotherUser = new User();
+                anotherUser.setId(2L);
+                anotherUser.setUsername("someone_else");
 
-    @Test
-    void getClickEventsByDate_ReturnsGroupedEvents() {
-        ClickEvent clickEvent = new ClickEvent();
-        clickEvent.setClickDate(LocalDateTime.now());
-        clickEvent.setUrlMapping(urlMapping);
+                when(urlMappingRepository.findById(1L)).thenReturn(Optional.of(urlMapping));
 
-        when(urlMappingRepository.findByShortUrl("abc12345")).thenReturn(urlMapping);
-        when(clickEventRepository.findByUrlMappingAndClickDateBetween(any(), any(), any()))
-                .thenReturn(List.of(clickEvent));
+                assertThrows(RuntimeException.class, () -> urlMappingService.deleteUrl(1L, anotherUser));
+                verify(urlMappingRepository, never()).delete(any());
+        }
 
-        List<ClickEventDTO> result = urlMappingService.getClickEventsByDate(
-                "abc12345",
-                LocalDateTime.now().minusDays(1),
-                LocalDateTime.now().plusDays(1)
-        );
+        @Test
+        void deleteUrl_ThrowsException_WhenUrlNotFound() {
+                when(urlMappingRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertNotNull(result);
-        assertEquals(1, result.size());
-    }
+                assertThrows(RuntimeException.class, () -> urlMappingService.deleteUrl(99L, user));
+        }
 
-    @Test
-    void getClickEventsByDate_ReturnsNull_WhenShortUrlNotFound() {
-        when(urlMappingRepository.findByShortUrl("invalid")).thenReturn(null);
+        // ───── updateUrl ─────
 
-        List<ClickEventDTO> result = urlMappingService.getClickEventsByDate(
-                "invalid",
-                LocalDateTime.now().minusDays(1),
-                LocalDateTime.now()
-        );
+        @Test
+        void updateUrl_Success_WhenOwner() {
+                when(urlMappingRepository.findById(1L)).thenReturn(Optional.of(urlMapping));
+                when(urlMappingRepository.save(any(UrlMapping.class))).thenReturn(urlMapping);
 
-        assertNull(result);
-    }
+                UrlMappingDTO result = urlMappingService.updateUrl(1L, "https://newurl.com", user);
 
-    // ───── getTotalClicksByUserAndDate ─────
+                assertNotNull(result);
+                assertEquals("https://newurl.com", result.getOriginalUrl());
+        }
 
-    @Test
-    void getTotalClicksByUserAndDate_ReturnsMap() {
-        ClickEvent clickEvent = new ClickEvent();
-        clickEvent.setClickDate(LocalDateTime.now());
-        clickEvent.setUrlMapping(urlMapping);
+        @Test
+        void updateUrl_ThrowsException_WhenNotOwner() {
+                User anotherUser = new User();
+                anotherUser.setId(2L);
 
-        when(urlMappingRepository.findByUser(user)).thenReturn(List.of(urlMapping));
-        when(clickEventRepository.findByUrlMappingInAndClickDateBetween(any(), any(), any()))
-                .thenReturn(List.of(clickEvent));
+                when(urlMappingRepository.findById(1L)).thenReturn(Optional.of(urlMapping));
 
-        Map<LocalDate, Long> result = urlMappingService.getTotalClicksByUserAndDate(
-                user,
-                LocalDate.now().minusDays(1),
-                LocalDate.now()
-        );
+                assertThrows(RuntimeException.class,
+                                () -> urlMappingService.updateUrl(1L, "https://newurl.com", anotherUser));
+        }
 
-        assertNotNull(result);
-        assertEquals(1, result.size());
-    }
+        @Test
+        void updateUrl_RejectsInvalidUrl() {
+                when(urlMappingRepository.findById(1L))
+                                .thenReturn(Optional.of(urlMapping));
+
+                ResponseStatusException exception = assertThrows(
+                                ResponseStatusException.class,
+                                () -> urlMappingService.updateUrl(
+                                                1L, "javascript:alert(1)", user));
+
+                assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+
+                verify(urlMappingRepository, never()).save(any(UrlMapping.class));
+        }
+
+        // ───── getClickEventsByDate ─────
+
+        @Test
+        void getClickEventsByDate_ReturnsGroupedEvents() {
+                ClickEvent clickEvent = new ClickEvent();
+                clickEvent.setClickDate(LocalDateTime.now());
+                clickEvent.setUrlMapping(urlMapping);
+
+                when(urlMappingRepository.findByShortUrl("abc12345"))
+                                .thenReturn(urlMapping);
+
+                when(clickEventRepository.findByUrlMappingAndClickDateBetween(
+                                any(), any(), any()))
+                                .thenReturn(List.of(clickEvent));
+
+                List<ClickEventDTO> result = urlMappingService.getClickEventsByDate(
+                                "abc12345",
+                                LocalDateTime.now().minusDays(1),
+                                LocalDateTime.now().plusDays(1),
+                                user);
+
+                assertNotNull(result);
+                assertEquals(1, result.size());
+        }
+
+        @Test
+        void getClickEventsByDate_ThrowsNotFound_WhenShortUrlNotFound() {
+                when(urlMappingRepository.findByShortUrl("invalid"))
+                                .thenReturn(null);
+
+                ResponseStatusException exception = assertThrows(
+                                ResponseStatusException.class,
+                                () -> urlMappingService.getClickEventsByDate(
+                                                "invalid",
+                                                LocalDateTime.now().minusDays(1),
+                                                LocalDateTime.now(),
+                                                user));
+
+                assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+        }
+
+        @Test
+        void getClickEventsByDate_ThrowsNotFound_WhenNotOwner() {
+                User anotherUser = new User();
+                anotherUser.setId(2L);
+                anotherUser.setUsername("someone_else");
+
+                when(urlMappingRepository.findByShortUrl("abc12345"))
+                                .thenReturn(urlMapping);
+
+                ResponseStatusException exception = assertThrows(
+                                ResponseStatusException.class,
+                                () -> urlMappingService.getClickEventsByDate(
+                                                "abc12345",
+                                                LocalDateTime.now().minusDays(1),
+                                                LocalDateTime.now(),
+                                                anotherUser));
+
+                assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+
+                verify(clickEventRepository, never())
+                                .findByUrlMappingAndClickDateBetween(
+                                                any(), any(), any());
+        }
+
+        // ───── getTotalClicksByUserAndDate ─────
+
+        @Test
+        void getTotalClicksByUserAndDate_ReturnsMap() {
+                ClickEvent clickEvent = new ClickEvent();
+                clickEvent.setClickDate(LocalDateTime.now());
+                clickEvent.setUrlMapping(urlMapping);
+
+                when(urlMappingRepository.findByUser(user)).thenReturn(List.of(urlMapping));
+                when(clickEventRepository.findByUrlMappingInAndClickDateBetween(any(), any(), any()))
+                                .thenReturn(List.of(clickEvent));
+
+                Map<LocalDate, Long> result = urlMappingService.getTotalClicksByUserAndDate(
+                                user,
+                                LocalDate.now().minusDays(1),
+                                LocalDate.now());
+
+                assertNotNull(result);
+                assertEquals(1, result.size());
+        }
 }

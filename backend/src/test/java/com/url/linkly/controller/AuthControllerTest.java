@@ -47,9 +47,9 @@ class AuthControllerTest {
         when(userService.authenticateUser(any(LoginRequest.class))).thenReturn(jwtResponse);
 
         mockMvc.perform(post("/api/auth/public/login")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(loginRequest)))
                 .andExpect(status().isOk());
     }
 
@@ -66,9 +66,9 @@ class AuthControllerTest {
         when(userService.registerUser(any(User.class))).thenReturn(new User());
 
         mockMvc.perform(post("/api/auth/public/register")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(registerRequest)))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(registerRequest)))
                 .andExpect(status().isOk())
                 .andExpect(content().string("User registered successfully!"));
     }
@@ -85,9 +85,9 @@ class AuthControllerTest {
                 .thenThrow(new UserAlreadyExistsException("Email already exists."));
 
         mockMvc.perform(post("/api/auth/public/register")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(registerRequest)))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(registerRequest)))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string("Email already exists."));
     }

@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "../api/api";
 
-export const useFetchMyShortUrls = (token, onError) => {
+export const useFetchMyShortUrls = (token, page = 0) => {
   return useQuery({
-    queryKey: ["my-shortenurls", token],
-    enabled: !!token, // only run the query if token is available
+    queryKey: ["my-shortenurls", token, page],
+    enabled: !!token,
     queryFn: async () => {
-      const response = await api.get("/api/urls/myurls", {
+      const response = await api.get(`/api/urls/myurls?page=${page}&size=5`, {
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
@@ -16,20 +16,11 @@ export const useFetchMyShortUrls = (token, onError) => {
 
       return response.data;
     },
-
-    select: (data) => {
-      const sortedData = data.sort(
-        (a, b) => new Date(b.createdDate) - new Date(a.createdDate),
-      );
-      return sortedData;
-    },
-
-    onError,
     staleTime: 5000,
   });
 };
 
-export const useFetchTotalClicks = (token, onError) => {
+export const useFetchTotalClicks = (token) => {
   return useQuery({
     queryKey: ["url-totalclick", token],
     enabled: !!token, // only run the query if token is available
@@ -55,7 +46,6 @@ export const useFetchTotalClicks = (token, onError) => {
       }));
     },
 
-    onError,
     staleTime: 5000,
   });
 };

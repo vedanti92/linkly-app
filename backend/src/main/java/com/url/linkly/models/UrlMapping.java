@@ -13,7 +13,10 @@ public class UrlMapping {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String originalUrl;
+
+    @Column(nullable = false, unique = true)
     private String shortUrl;
+
     private int clickCount = 0;
     private LocalDateTime createdDate;
 
@@ -21,10 +24,6 @@ public class UrlMapping {
     @JoinColumn(name = "user_id")
     private User user;
 
-    @OneToMany(
-            mappedBy = "urlMapping",
-            cascade = CascadeType.ALL,
-            orphanRemoval = true
-    )
+    @OneToMany(mappedBy = "urlMapping", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ClickEvent> clickEvents;
 }

@@ -43,7 +43,7 @@ const CreateNewShortUrl = ({ setOpen, refetch }) => {
         });
       });
 
-      await refetch(); // to update the list of short URLs in the dashboard
+      refetch(); // to update the list of short URLs in the dashboard
       reset();
       setOpen(false);
     } catch (error) {

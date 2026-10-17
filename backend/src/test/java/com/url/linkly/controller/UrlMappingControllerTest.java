@@ -69,9 +69,9 @@ class UrlMappingControllerTest {
         when(urlMappingService.createShortUrl(anyString(), any(User.class))).thenReturn(urlMappingDTO);
 
         mockMvc.perform(post("/api/urls/shorten")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("originalUrl", "https://example.com"))))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("originalUrl", "https://example.com"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.shortUrl").value("abc12345"))
                 .andExpect(jsonPath("$.originalUrl").value("https://example.com"));
@@ -83,12 +83,26 @@ class UrlMappingControllerTest {
     @WithMockUser(username = "vedanti", roles = "USER")
     void getUserUrls_Success() throws Exception {
         when(userService.findByUsername("vedanti")).thenReturn(user);
-        when(urlMappingService.getUrlsByUser(user)).thenReturn(List.of(urlMappingDTO));
 
-        mockMvc.perform(get("/api/urls/myurls"))
+        org.springframework.data.domain.Page<UrlMappingDTO> urlPage = new org.springframework.data.domain.PageImpl<>(
+                List.of(urlMappingDTO),
+                org.springframework.data.domain.PageRequest.of(0, 5),
+                1);
+
+        when(urlMappingService.getUrlsByUser(
+                eq(user),
+                any(org.springframework.data.domain.Pageable.class))).thenReturn(urlPage);
+
+        mockMvc.perform(get("/api/urls/myurls")
+                .param("page", "0")
+                .param("size", "5"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].shortUrl").value("abc12345"));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].shortUrl").value("abc12345"))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.number").value(0))
+                .andExpect(jsonPath("$.size").value(5));
     }
 
     // ───── DELETE /api/urls/{id} ─────
@@ -99,7 +113,7 @@ class UrlMappingControllerTest {
         when(userService.findByUsername("vedanti")).thenReturn(user);
 
         mockMvc.perform(delete("/api/urls/1")
-                        .with(csrf()))
+                .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(content().string("URL deleted successfully!"));
     }
@@ -116,9 +130,9 @@ class UrlMappingControllerTest {
                 .thenReturn(urlMappingDTO);
 
         mockMvc.perform(put("/api/urls/1")
-                        .with(csrf())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("originalUrl", "https://newurl.com"))))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("originalUrl", "https://newurl.com"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.originalUrl").value("https://newurl.com"));
     }
@@ -128,12 +142,17 @@ class UrlMappingControllerTest {
     @Test
     @WithMockUser(username = "vedanti", roles = "USER")
     void getUrlAnalytics_Success() throws Exception {
-        when(urlMappingService.getClickEventsByDate(anyString(), any(LocalDateTime.class), any(LocalDateTime.class)))
-                .thenReturn(List.of());
+        when(userService.findByUsername("vedanti")).thenReturn(user);
+
+        when(urlMappingService.getClickEventsByDate(
+                anyString(),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                any(User.class))).thenReturn(List.of());
 
         mockMvc.perform(get("/api/urls/analytics/abc12345")
-                        .param("startDate", "2024-01-01T00:00:00")
-                        .param("endDate", "2024-12-31T23:59:59"))
+                .param("startDate", "2024-01-01T00:00:00")
+                .param("endDate", "2024-12-31T23:59:59"))
                 .andExpect(status().isOk());
     }
 }
